@@ -178,6 +178,14 @@ for job in jobs:
 
 ## Troubleshooting
 
+### Chromium notification pop-ups (macOS)
+- ✅ **FIXED**: Notification pop-ups are now automatically blocked
+- See `CHROMIUM_POPUPS_FIX.md` for details
+
+### Search box not filling
+- ✅ **FIXED**: Now targets the correct search box (`#search-box9`)
+- See `SELECTOR_FIX.md` for details
+
 ### Browser doesn't open
 - Check if Chromium is installed: `playwright install chromium`
 - Try running in headless mode: `headless=True`

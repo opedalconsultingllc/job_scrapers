@@ -44,9 +44,13 @@ RETRY_CONFIG = {
 # Selectors for Microsoft Careers
 SELECTORS = {
     'job_title_input': [
+        '#search-box9',  # Specific ID from Microsoft Careers
+        'input.ms-SearchBox-field',  # Class name from the actual page
+        'input[placeholder*="keyword"]',
         'input[placeholder*="job title"]',
         'input[aria-label*="job title"]',
-        'input[placeholder*="keyword"]',
+        'input[aria-label*="keyword"]',
+        'input[role="searchbox"]',
         'input[type="search"]',
         '#keyword',
     ],

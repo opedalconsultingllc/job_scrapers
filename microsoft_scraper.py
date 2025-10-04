@@ -143,6 +143,20 @@ class MicrosoftCareersScraper:
             await self.playwright.stop()
             logger.info("Browser closed")
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type(PlaywrightTimeout),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
+    async def navigate_to_homepage(self, page: Page) -> bool:
+        """
+        Navigate to Microsoft Careers homepage with retry logic.
+        
+        Args:
+            page: Playwright page object
+            
+        Returns:
             bool: True if navigation successful
         """
         logger.info(f"Navigating to {self.BASE_URL}")
@@ -208,15 +222,19 @@ class MicrosoftCareersScraper:
         logger.info(f"Searching for '{job_title}' jobs in '{location}'")
         
         try:
-            # Wait for search form to be visible
-            await page.wait_for_selector('input[placeholder*="job title"], input[aria-label*="job title"], input[type="search"]', timeout=15000)
+            # Wait for search form to be visible with more specific selectors
+            await page.wait_for_selector('#search-box9, input[placeholder*="job title"], input[aria-label*="job title"], .ms-SearchBox-field', timeout=15000)
             await HumanBehavior.random_delay(1, 2)
             
-            # Find and fill job title field
+            # Find and fill job title field - prioritize the actual ID from the page
             job_title_selectors = [
+                '#search-box9',  # Specific ID from Microsoft Careers
+                'input.ms-SearchBox-field',  # Class name from the actual page
+                'input[placeholder*="keyword"]',
                 'input[placeholder*="job title"]',
                 'input[aria-label*="job title"]',
-                'input[placeholder*="keyword"]',
+                'input[aria-label*="keyword"]',
+                'input[role="searchbox"]',
                 'input[type="search"]',
                 '#keyword',
             ]
@@ -226,10 +244,15 @@ class MicrosoftCareersScraper:
                 try:
                     if await page.locator(selector).count() > 0:
                         logger.info(f"Found job title field: {selector}")
+                        # Clear any existing value first
+                        await page.fill(selector, '')
+                        await HumanBehavior.random_delay(0.3, 0.8)
+                        # Type the search term
                         await HumanBehavior.human_type(page, selector, job_title)
                         job_field_found = True
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Selector {selector} failed: {e}")
                     continue
             
             if not job_field_found:
@@ -423,6 +446,9 @@ class MicrosoftCareersScraper:
         try:
             await self.initialize_browser()
             page = await self.context.new_page()
+            
+            # Set up dialog handlers
+            await self.setup_dialog_handlers(page)
             
             # Navigate to homepage
             if not await self.navigate_to_homepage(page):
