@@ -485,6 +485,7 @@ class MicrosoftCareersScraper:
             
             # Limit to max_jobs
             job_elements = job_elements[:max_jobs]
+            logger.info(f"Processing {len(job_elements)} job elements (using selector: {used_selector})")
             
             # Extract job information
             for idx, element in enumerate(job_elements, 1):
