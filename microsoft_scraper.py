@@ -261,9 +261,13 @@ class MicrosoftCareersScraper:
             
             # Find and fill location field
             location_selectors = [
+                'input#location-box9',  # Specific ID pattern (matching search-box9 pattern)
+                'input[id*="location"]',  # Any input with 'location' in ID
                 'input[placeholder*="location"]',
                 'input[aria-label*="location"]',
                 'input[placeholder*="city"]',
+                'input[placeholder*="where"]',
+                'input[name*="location"]',
                 '#location',
             ]
             
@@ -272,11 +276,15 @@ class MicrosoftCareersScraper:
                 try:
                     if await page.locator(selector).count() > 0:
                         logger.info(f"Found location field: {selector}")
+                        # Clear and fill location field
+                        await page.fill(selector, '')
+                        await HumanBehavior.random_delay(0.3, 0.8)
                         await HumanBehavior.human_type(page, selector, location)
                         location_field_found = True
                         await HumanBehavior.random_delay(1, 2)
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Location selector {selector} failed: {e}")
                     continue
             
             if not location_field_found:
@@ -336,18 +344,49 @@ class MicrosoftCareersScraper:
         jobs = []
         
         try:
-            # Wait for job listings to appear
-            await page.wait_for_selector('article, .job-listing, .job-item, [data-job-id]', timeout=15000)
+            # Wait for job listings to appear - try multiple possible selectors
+            logger.info("Waiting for job listings to appear...")
+            
+            # Try to wait for any of these selectors
+            wait_selectors = [
+                'article',
+                '[role="listitem"]',
+                '[data-job-id]',
+                '[class*="job"]',
+                'ul[role="list"] > li',
+                '.ms-List-cell'
+            ]
+            
+            waited = False
+            for wait_sel in wait_selectors:
+                try:
+                    await page.wait_for_selector(wait_sel, timeout=10000)
+                    logger.info(f"Found elements with selector: {wait_sel}")
+                    waited = True
+                    break
+                except Exception:
+                    continue
+            
+            if not waited:
+                logger.warning("Could not find any expected job listing elements")
+            
             await HumanBehavior.random_delay(2, 3)
             
-            # Common selectors for job listings
+            # Try comprehensive list of selectors for job listings
             listing_selectors = [
+                '[role="listitem"]',  # Common in modern React apps
+                '[data-job-id]',
+                '[data-automation*="job"]',
                 'article',
+                'ul[role="list"] > li',
+                '.ms-List-cell',  # Microsoft Fabric UI
+                '[class*="jobCard"]',
+                '[class*="job-card"]',
+                '[class*="JobCard"]',
                 '.job-listing',
                 '.job-item',
-                '.job-card',
-                '[data-job-id]',
-                '[role="article"]',
+                '[class*="searchResult"]',
+                '[class*="result-item"]',
             ]
             
             job_elements = None
@@ -358,11 +397,16 @@ class MicrosoftCareersScraper:
                         logger.info(f"Found {len(elements)} job listings with selector: {selector}")
                         job_elements = elements
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Selector {selector} failed: {e}")
                     continue
             
             if not job_elements:
-                logger.warning("No job listings found")
+                # Last resort: log page content for debugging
+                page_text = await page.evaluate("() => document.body.innerText")
+                logger.error("No job listings found with any selector!")
+                logger.info(f"Page text preview: {page_text[:500]}")
+                logger.info(f"Current URL: {page.url}")
                 return jobs
             
             # Limit to max_jobs
@@ -381,39 +425,128 @@ class MicrosoftCareersScraper:
                         'location': 'Seattle',
                     }
                     
-                    # Try to extract title
+                    # Try to extract title with multiple selectors
                     try:
-                        title_elem = element.locator('h2, h3, .job-title, [class*="title"]').first
-                        job_data['title'] = await title_elem.text_content()
+                        title_selectors = [
+                            'h2', 'h3', 'h4',
+                            '[class*="title"]', '[class*="Title"]',
+                            '[data-automation*="title"]',
+                            'a[class*="title"]',
+                            '.ms-Link'
+                        ]
+                        title_found = False
+                        for title_sel in title_selectors:
+                            try:
+                                title_elem = element.locator(title_sel).first
+                                title_text = await title_elem.text_content()
+                                if title_text and title_text.strip():
+                                    job_data['title'] = title_text.strip()
+                                    title_found = True
+                                    break
+                            except:
+                                continue
+                        if not title_found:
+                            job_data['title'] = 'N/A'
                     except Exception:
                         job_data['title'] = 'N/A'
                     
-                    # Try to extract location
+                    # Try to extract location with multiple selectors
                     try:
-                        location_elem = element.locator('[class*="location"], [aria-label*="location"]').first
-                        job_data['job_location'] = await location_elem.text_content()
+                        location_selectors = [
+                            '[class*="location"]', '[class*="Location"]',
+                            '[aria-label*="location"]',
+                            '[data-automation*="location"]',
+                            'span[class*="city"]',
+                            'div[class*="city"]'
+                        ]
+                        location_found = False
+                        for loc_sel in location_selectors:
+                            try:
+                                location_elem = element.locator(loc_sel).first
+                                location_text = await location_elem.text_content()
+                                if location_text and location_text.strip():
+                                    job_data['job_location'] = location_text.strip()
+                                    location_found = True
+                                    break
+                            except:
+                                continue
+                        if not location_found:
+                            job_data['job_location'] = 'N/A'
                     except Exception:
                         job_data['job_location'] = 'N/A'
                     
                     # Try to extract job ID or URL
                     try:
+                        # First try to get href from any link in the element
                         link_elem = element.locator('a').first
                         href = await link_elem.get_attribute('href')
-                        job_data['url'] = href if href else 'N/A'
+                        if href:
+                            # Make it absolute if relative
+                            if href.startswith('/'):
+                                job_data['url'] = f"https://careers.microsoft.com{href}"
+                            else:
+                                job_data['url'] = href
+                        else:
+                            job_data['url'] = 'N/A'
                     except Exception:
-                        job_data['url'] = 'N/A'
+                        # Try to get data-job-id or similar
+                        try:
+                            job_id = await element.get_attribute('data-job-id')
+                            if job_id:
+                                job_data['url'] = f"https://careers.microsoft.com/job/{job_id}"
+                            else:
+                                job_data['url'] = 'N/A'
+                        except:
+                            job_data['url'] = 'N/A'
                     
                     # Try to extract posting date
                     try:
-                        date_elem = element.locator('[class*="date"], [class*="posted"]').first
-                        job_data['posted_date'] = await date_elem.text_content()
+                        date_selectors = [
+                            '[class*="date"]', '[class*="Date"]',
+                            '[class*="posted"]', '[class*="Posted"]',
+                            '[data-automation*="date"]',
+                            'time'
+                        ]
+                        date_found = False
+                        for date_sel in date_selectors:
+                            try:
+                                date_elem = element.locator(date_sel).first
+                                date_text = await date_elem.text_content()
+                                if date_text and date_text.strip():
+                                    job_data['posted_date'] = date_text.strip()
+                                    date_found = True
+                                    break
+                            except:
+                                continue
+                        if not date_found:
+                            job_data['posted_date'] = 'N/A'
                     except Exception:
                         job_data['posted_date'] = 'N/A'
                     
                     # Try to extract description snippet
                     try:
-                        desc_elem = element.locator('p, .description, [class*="description"]').first
-                        job_data['description'] = await desc_elem.text_content()
+                        desc_selectors = [
+                            'p', '[class*="description"]', '[class*="Description"]',
+                            '[class*="snippet"]', '[data-automation*="description"]'
+                        ]
+                        desc_found = False
+                        for desc_sel in desc_selectors:
+                            try:
+                                desc_elem = element.locator(desc_sel).first
+                                desc_text = await desc_elem.text_content()
+                                if desc_text and len(desc_text.strip()) > 20:  # Meaningful description
+                                    job_data['description'] = desc_text.strip()
+                                    desc_found = True
+                                    break
+                            except:
+                                continue
+                        if not desc_found:
+                            # Fallback: get all text from element
+                            all_text = await element.text_content()
+                            if all_text:
+                                job_data['description'] = all_text.strip()[:500]  # First 500 chars
+                            else:
+                                job_data['description'] = 'N/A'
                     except Exception:
                         job_data['description'] = 'N/A'
                     

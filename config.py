@@ -55,9 +55,13 @@ SELECTORS = {
         '#keyword',
     ],
     'location_input': [
+        'input#location-box9',  # Specific ID pattern (matching search-box9)
+        'input[id*="location"]',  # Any input with 'location' in ID
         'input[placeholder*="location"]',
         'input[aria-label*="location"]',
         'input[placeholder*="city"]',
+        'input[placeholder*="where"]',
+        'input[name*="location"]',
         '#location',
     ],
     'search_button': [
@@ -66,14 +70,47 @@ SELECTORS = {
         'button[type="submit"]',
         'input[type="submit"]',
         '.search-button',
+        'button[aria-label*="search"]',
+        'button[aria-label*="find"]',
     ],
     'job_listings': [
+        '[role="listitem"]',  # Common in modern React apps
+        '[data-job-id]',
+        '[data-automation*="job"]',
         'article',
+        'ul[role="list"] > li',
+        '.ms-List-cell',  # Microsoft Fabric UI
+        '[class*="jobCard"]',
+        '[class*="job-card"]',
+        '[class*="JobCard"]',
         '.job-listing',
         '.job-item',
-        '.job-card',
-        '[data-job-id]',
-        '[role="article"]',
+        '[class*="searchResult"]',
+        '[class*="result-item"]',
+    ],
+    'job_title': [
+        'h2', 'h3', 'h4',
+        '[class*="title"]',
+        '[class*="Title"]',
+        '[data-automation*="title"]',
+        'a[class*="title"]',
+        '.ms-Link',
+    ],
+    'job_location': [
+        '[class*="location"]',
+        '[class*="Location"]',
+        '[aria-label*="location"]',
+        '[data-automation*="location"]',
+        'span[class*="city"]',
+        'div[class*="city"]',
+    ],
+    'job_date': [
+        '[class*="date"]',
+        '[class*="Date"]',
+        '[class*="posted"]',
+        '[class*="Posted"]',
+        '[data-automation*="date"]',
+        'time',
     ],
     'cookie_consent': [
         'button:has-text("Accept")',
