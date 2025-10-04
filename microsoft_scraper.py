@@ -347,6 +347,14 @@ class MicrosoftCareersScraper:
             # Wait for job listings to appear - try multiple possible selectors
             logger.info("Waiting for job listings to appear...")
             
+            # First, wait for results indicator
+            try:
+                await page.wait_for_selector('h1:has-text("results"), h1:has-text("result")', timeout=10000)
+                logger.info("Results counter found - jobs should be present")
+                await HumanBehavior.random_delay(2, 3)  # Extra wait for dynamic content
+            except Exception:
+                logger.warning("Results counter not found, continuing anyway")
+            
             # Try to wait for any of these selectors
             wait_selectors = [
                 'article',
@@ -354,7 +362,10 @@ class MicrosoftCareersScraper:
                 '[data-job-id]',
                 '[class*="job"]',
                 'ul[role="list"] > li',
-                '.ms-List-cell'
+                '.ms-List-cell',
+                'a[href*="/job"]',  # Links containing /job
+                'div[class*="card"]',
+                'div[class*="result"]'
             ]
             
             waited = False
@@ -369,6 +380,9 @@ class MicrosoftCareersScraper:
             
             if not waited:
                 logger.warning("Could not find any expected job listing elements")
+                # Log page structure for debugging
+                html_snippet = await page.evaluate("() => document.body.innerHTML.substring(0, 2000)")
+                logger.debug(f"Page HTML preview: {html_snippet}")
             
             await HumanBehavior.random_delay(2, 3)
             
@@ -387,19 +401,67 @@ class MicrosoftCareersScraper:
                 '.job-item',
                 '[class*="searchResult"]',
                 '[class*="result-item"]',
+                'div[class*="job"]',  # Any div with 'job' in class
+                'div[class*="card"]',  # Card-based layouts
+                'a[href*="/job/"]',  # Links with /job/ in URL
             ]
             
             job_elements = None
+            used_selector = None
+            
             for selector in listing_selectors:
                 try:
                     elements = await page.locator(selector).all()
                     if len(elements) > 0:
-                        logger.info(f"Found {len(elements)} job listings with selector: {selector}")
-                        job_elements = elements
-                        break
+                        logger.info(f"Found {len(elements)} elements with selector: {selector}")
+                        
+                        # Verify these are actually job elements by checking content
+                        # A job element should have substantial text content
+                        valid_elements = []
+                        for elem in elements[:10]:  # Check first 10
+                            try:
+                                text = await elem.text_content()
+                                if text and len(text.strip()) > 30:  # At least 30 chars
+                                    valid_elements.append(elem)
+                            except:
+                                continue
+                        
+                        if valid_elements:
+                            logger.info(f"Verified {len(valid_elements)} valid job elements")
+                            job_elements = elements  # Use all elements if some are valid
+                            used_selector = selector
+                            break
+                        else:
+                            logger.debug(f"Elements found with {selector} don't look like jobs")
+                            
                 except Exception as e:
                     logger.debug(f"Selector {selector} failed: {e}")
                     continue
+            
+            if not job_elements:
+                # Last resort: try to find job elements by looking for patterns
+                logger.warning("Standard selectors failed, trying pattern-based search...")
+                
+                try:
+                    # Look for elements that have links with job URLs
+                    job_elements = await page.locator('a[href*="/job/"]').all()
+                    if job_elements:
+                        # Get parent elements as those are likely the job containers
+                        parent_elements = []
+                        for link in job_elements[:50]:  # Limit to first 50
+                            try:
+                                parent = await link.evaluate_handle("el => el.closest('li, div, article')")
+                                if parent:
+                                    parent_elements.append(parent)
+                            except:
+                                continue
+                        
+                        if parent_elements:
+                            job_elements = parent_elements
+                            used_selector = "parent of a[href*='/job/']"
+                            logger.info(f"Found {len(job_elements)} job elements via parent search")
+                except Exception as e:
+                    logger.error(f"Pattern-based search failed: {e}")
             
             if not job_elements:
                 # Last resort: log page content for debugging
@@ -407,6 +469,18 @@ class MicrosoftCareersScraper:
                 logger.error("No job listings found with any selector!")
                 logger.info(f"Page text preview: {page_text[:500]}")
                 logger.info(f"Current URL: {page.url}")
+                
+                # Try to get page structure
+                structure = await page.evaluate("""
+                    () => {
+                        const allElements = {};
+                        ['article', 'li', 'div', 'a'].forEach(tag => {
+                            allElements[tag] = document.querySelectorAll(tag).length;
+                        });
+                        return allElements;
+                    }
+                """)
+                logger.info(f"Page structure: {structure}")
                 return jobs
             
             # Limit to max_jobs
