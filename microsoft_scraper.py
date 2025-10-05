@@ -388,12 +388,14 @@ class MicrosoftCareersScraper:
             
             # Try comprehensive list of selectors for job listings
             listing_selectors = [
+                'div.ms-List-cell[role="listitem"]',  # ⭐ ACTUAL SELECTOR from inspection
+                '[role="listitem"].ms-List-cell',  # Alternative format
+                '.ms-List-cell',  # Microsoft Fabric UI
                 '[role="listitem"]',  # Common in modern React apps
                 '[data-job-id]',
                 '[data-automation*="job"]',
                 'article',
                 'ul[role="list"] > li',
-                '.ms-List-cell',  # Microsoft Fabric UI
                 '[class*="jobCard"]',
                 '[class*="job-card"]',
                 '[class*="JobCard"]',
@@ -503,7 +505,9 @@ class MicrosoftCareersScraper:
                     # Try to extract title with multiple selectors
                     try:
                         title_selectors = [
-                            'h2', 'h3', 'h4',
+                            'h2.MZGzlrn8gfgSs8TZHhv2',  # ⭐ ACTUAL class from inspection
+                            'h2',  # Fallback to any h2
+                            'h3', 'h4',
                             '[class*="title"]', '[class*="Title"]',
                             '[data-automation*="title"]',
                             'a[class*="title"]',
@@ -528,6 +532,9 @@ class MicrosoftCareersScraper:
                     # Try to extract location with multiple selectors
                     try:
                         location_selectors = [
+                            'i[data-icon-name="POI"] + span',  # ⭐ ACTUAL: span after location icon
+                            'i.wwxC8vs2c2O5YaFddx7C + span',  # Alternative with class
+                            'span:has(+ i[data-icon-name="POI"])',  # Span near location icon
                             '[class*="location"]', '[class*="Location"]',
                             '[aria-label*="location"]',
                             '[data-automation*="location"]',
@@ -552,17 +559,24 @@ class MicrosoftCareersScraper:
                     
                     # Try to extract job ID or URL
                     try:
-                        # First try to get href from any link in the element
-                        link_elem = element.locator('a').first
-                        href = await link_elem.get_attribute('href')
-                        if href:
-                            # Make it absolute if relative
-                            if href.startswith('/'):
-                                job_data['url'] = f"https://careers.microsoft.com{href}"
-                            else:
-                                job_data['url'] = href
+                        # First try to get job ID from aria-label (e.g., "Job item 1827725")
+                        aria_label = await element.get_attribute('aria-label')
+                        if aria_label and 'Job item' in aria_label:
+                            job_id = aria_label.replace('Job item ', '').strip()
+                            job_data['url'] = f"https://careers.microsoft.com/us/en/job/{job_id}"
+                            job_data['job_id'] = job_id
                         else:
-                            job_data['url'] = 'N/A'
+                            # Try to get href from any link in the element
+                            link_elem = element.locator('a').first
+                            href = await link_elem.get_attribute('href')
+                            if href:
+                                # Make it absolute if relative
+                                if href.startswith('/'):
+                                    job_data['url'] = f"https://careers.microsoft.com{href}"
+                                else:
+                                    job_data['url'] = href
+                            else:
+                                job_data['url'] = 'N/A'
                     except Exception:
                         # Try to get data-job-id or similar
                         try:
@@ -577,6 +591,7 @@ class MicrosoftCareersScraper:
                     # Try to extract posting date
                     try:
                         date_selectors = [
+                            'i[data-icon-name="Clock"] + span',  # ⭐ ACTUAL: span after clock icon
                             '[class*="date"]', '[class*="Date"]',
                             '[class*="posted"]', '[class*="Posted"]',
                             '[data-automation*="date"]',
@@ -601,6 +616,8 @@ class MicrosoftCareersScraper:
                     # Try to extract description snippet
                     try:
                         desc_selectors = [
+                            'span[aria-label="job description"]',  # ⭐ ACTUAL from inspection
+                            'span.css-544',  # Alternative with class
                             'p', '[class*="description"]', '[class*="Description"]',
                             '[class*="snippet"]', '[data-automation*="description"]'
                         ]
