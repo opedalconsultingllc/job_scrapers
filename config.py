@@ -74,12 +74,14 @@ SELECTORS = {
         'button[aria-label*="find"]',
     ],
     'job_listings': [
+        'div.ms-List-cell[role="listitem"]',  # ⭐ ACTUAL from Microsoft Careers
+        '[role="listitem"].ms-List-cell',  # Alternative format
+        '.ms-List-cell',  # Microsoft Fabric UI
         '[role="listitem"]',  # Common in modern React apps
         '[data-job-id]',
         '[data-automation*="job"]',
         'article',
         'ul[role="list"] > li',
-        '.ms-List-cell',  # Microsoft Fabric UI
         '[class*="jobCard"]',
         '[class*="job-card"]',
         '[class*="JobCard"]',
@@ -89,6 +91,7 @@ SELECTORS = {
         '[class*="result-item"]',
     ],
     'job_title': [
+        'h2.MZGzlrn8gfgSs8TZHhv2',  # ⭐ ACTUAL from Microsoft Careers
         'h2', 'h3', 'h4',
         '[class*="title"]',
         '[class*="Title"]',
@@ -97,6 +100,8 @@ SELECTORS = {
         '.ms-Link',
     ],
     'job_location': [
+        'i[data-icon-name="POI"] + span',  # ⭐ ACTUAL: span after location icon
+        'i.wwxC8vs2c2O5YaFddx7C + span',  # Alternative with class
         '[class*="location"]',
         '[class*="Location"]',
         '[aria-label*="location"]',
@@ -105,12 +110,22 @@ SELECTORS = {
         'div[class*="city"]',
     ],
     'job_date': [
+        'i[data-icon-name="Clock"] + span',  # ⭐ ACTUAL: span after clock icon
         '[class*="date"]',
         '[class*="Date"]',
         '[class*="posted"]',
         '[class*="Posted"]',
         '[data-automation*="date"]',
         'time',
+    ],
+    'job_description': [
+        'span[aria-label="job description"]',  # ⭐ ACTUAL from inspection
+        'span.css-544',  # Alternative with class
+        'p',
+        '[class*="description"]',
+        '[class*="Description"]',
+        '[class*="snippet"]',
+        '[data-automation*="description"]',
     ],
     'cookie_consent': [
         'button:has-text("Accept")',

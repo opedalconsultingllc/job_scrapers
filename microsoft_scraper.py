@@ -355,31 +355,17 @@ class MicrosoftCareersScraper:
             except Exception:
                 logger.warning("Results counter not found, continuing anyway")
             
-            # Try to wait for any of these selectors
-            wait_selectors = [
-                'article',
-                '[role="listitem"]',
-                '[data-job-id]',
-                '[class*="job"]',
-                'ul[role="list"] > li',
-                '.ms-List-cell',
-                'a[href*="/job"]',  # Links containing /job
-                'div[class*="card"]',
-                'div[class*="result"]'
-            ]
-            
-            waited = False
-            for wait_sel in wait_selectors:
+            # Wait for the specific job listing structure
+            try:
+                await page.wait_for_selector('div[role="listitem"].ms-List-cell', timeout=15000)
+                logger.info("Found job listing elements")
+            except Exception:
+                logger.warning("Could not find job listing elements, trying alternative selector")
                 try:
-                    await page.wait_for_selector(wait_sel, timeout=10000)
-                    logger.info(f"Found elements with selector: {wait_sel}")
-                    waited = True
-                    break
+                    await page.wait_for_selector('[role="listitem"]', timeout=10000)
+                    logger.info("Found elements with alternative selector")
                 except Exception:
-                    continue
-            
-            if not waited:
-                logger.warning("Could not find any expected job listing elements")
+                    logger.warning("Could not find any expected job listing elements")
                 # Log page structure for debugging
                 html_snippet = await page.evaluate("() => document.body.innerHTML.substring(0, 2000)")
                 logger.debug(f"Page HTML preview: {html_snippet}")
