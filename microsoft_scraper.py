@@ -546,7 +546,15 @@ class MicrosoftCareersScraper:
                     # Try to extract job ID or URL
                     try:
                         # First try to get job ID from aria-label (e.g., "Job item 1827725")
+                        # The aria-label might be on the container or a child div
                         aria_label = await element.get_attribute('aria-label')
+                        
+                        # If not on container, try child divs
+                        if not aria_label or 'Job item' not in aria_label:
+                            child_divs = element.locator('div[aria-label*="Job item"]')
+                            if await child_divs.count() > 0:
+                                aria_label = await child_divs.first.get_attribute('aria-label')
+                        
                         if aria_label and 'Job item' in aria_label:
                             job_id = aria_label.replace('Job item ', '').strip()
                             job_data['url'] = f"https://careers.microsoft.com/us/en/job/{job_id}"
@@ -563,7 +571,7 @@ class MicrosoftCareersScraper:
                                     job_data['url'] = href
                             else:
                                 job_data['url'] = 'N/A'
-                    except Exception:
+                    except Exception as e:
                         # Try to get data-job-id or similar
                         try:
                             job_id = await element.get_attribute('data-job-id')
